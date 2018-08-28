@@ -14,6 +14,7 @@ let appDelegate = UIApplication.shared.delegate as? AppDelegate
 class GoalsVC: UIViewController {
 
     @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var undoView: UIView!
     
     var goals: [Goal] = []
     
@@ -42,11 +43,39 @@ class GoalsVC: UIViewController {
         }
     }
     
+    func undoDelete() {
+        guard let managedContext = appDelegate?.persistentContainer.viewContext else { return }
+        
+        managedContext.undo()
+    }
+    
+    func fadeInView(view: UIView, duration: Double) {
+        UIView.animate(withDuration: duration, delay: 0, options: [], animations: {
+            view.alpha = 1.0
+        }, completion: { _ in
+            view.isHidden = false
+        })
+    }
+    
+    func fadeOutView(view: UIView, duration: Double) {
+        UIView.animate(withDuration: duration, delay: 0, options: [], animations: {
+            view.alpha = 0.0
+        }, completion: { _ in
+            view.isHidden = true
+        })
+    }
+    
     @IBAction func addGoalBtnWasPressed(_ sender: Any) {
         guard let createGoalVC = storyboard?.instantiateViewController(withIdentifier: "CreateGoalVC") else { return }
         presentDetail(createGoalVC)
     }
     
+    @IBAction func undoBtnWasPressed(_ sender: Any) {
+        self.undoDelete()
+        fetchCoreDataObjects()
+        tableView.reloadData()
+        fadeOutView(view: self.undoView, duration: 1.0)
+    }
 }
 
 extension GoalsVC: UITableViewDelegate, UITableViewDataSource {
@@ -78,6 +107,10 @@ extension GoalsVC: UITableViewDelegate, UITableViewDataSource {
             self.removeGoal(atIndexPath: indexPath)
             self.fetchCoreDataObjects()
             tableView.deleteRows(at: [indexPath], with: .automatic)
+            self.fadeInView(view: self.undoView, duration: 1.0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                self.fadeOutView(view: self.undoView, duration: 1.0)
+            }
         }
         
         let addAction = UITableViewRowAction(style: .normal, title: "ADD 1") { (rowAction, indexPath) in
@@ -115,6 +148,7 @@ extension GoalsVC {
     func removeGoal(atIndexPath indexPath: IndexPath) {
         guard let managedContext = appDelegate?.persistentContainer.viewContext else { return }
         
+        managedContext.undoManager = UndoManager()
         managedContext.delete(goals[indexPath.row])
         
         do {
